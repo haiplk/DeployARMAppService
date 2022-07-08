@@ -1,0 +1,296 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "dataCenterLocation": {
+      "defaultValue": "Australia East",
+      "type": "String",
+      "allowedValues": [
+        "Australia East",
+        "UK South",
+        "Central US"
+      ],
+      "metadata": {
+        "description": "The Azure Data Center location."
+      }
+    },
+    "locationSuffix": {
+      "type": "string"
+    },
+    "serverType": {
+      "type": "string",
+      "allowedValues": [
+        "linux"
+      ],
+      "defaultValue": "linux"
+    },
+    "serverSize": {
+      "type": "string",
+      "allowedValues": [
+        "B1",
+        "S1",
+        "S2",
+        "S3",
+        "P1V2",
+        "P1V2",
+        "P2V2",
+        "P3V2",
+        "P1V3",
+        "P2V3",
+        "P3V3"
+      ],
+      "defaultValue": "S1"
+    },
+    "serverTier": {
+      "type": "string",
+      "allowedValues": [
+        "Standard"
+      ],
+      "defaultValue": "Standard"
+    }
+  },
+  "variables": {
+    "resourceGroupName": "[concat('hello-' ,parameters('locationSuffix'))]",
+    "deploymentName": "[concat('hello-deployment-' ,parameters('locationSuffix'))]"
+  },
+  "resources": [
+    {
+      "name": "[variables('resourceGroupName')]",
+      "type": "Microsoft.Resources/resourceGroups",
+      "apiVersion": "2022-05-01",
+      "location": "[parameters('dataCenterLocation')]",
+      "dependsOn": [],
+      "tags": {}
+    },
+    {
+      "name": "[variables('deploymentName')]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2021-04-01",
+      "resourceGroup": "[variables('resourceGroupName')]",
+      "dependsOn": [ "[variables('resourceGroupName')]" ],
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "parameters": {
+          "locationSuffix": {
+            "value": "[parameters('locationSuffix')]"
+          },
+          "serverType": {
+            "value": "[parameters('serverType')]"
+          },
+          "serverSize": {
+            "value": "[parameters('serverSize')]"
+          },
+          "serverTier": {
+            "value": "[parameters('serverTier')]"
+          }
+        },
+        "mode": "Incremental",
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "locationSuffix": {
+              "defaultValue": "AUdev",
+              "type": "String",
+              "metadata": {
+                "description": "The suffix will be added into any resouce name."
+              }
+            },
+            "serverType": {
+              "type": "string",
+              "allowedValues": [
+                "linux"
+              ],
+              "defaultValue": "linux"
+            },
+            "serverSize": {
+              "type": "string",
+              "defaultValue": "S1"
+            },
+            "serverTier": {
+              "type": "string",
+              "allowedValues": [
+                "Standard"
+              ],
+              "defaultValue": "Standard"
+            }
+          },
+          "variables": {
+            "storageName": "[toLower(concat('hellostorage', parameters('locationSuffix')))]",
+            "cosmosDbName": "[toLower(concat( 'cosmos-',parameters('locationSuffix') ))]",
+            "apiName": "[concat('hello-api-', parameters('locationSuffix'))]",
+            "serverFarmName": "[concat( 'hello-api-serverfarm-', parameters('locationSuffix'))]",
+            "insightName": "[concat('hello-insight-', parameters('locationSuffix'))]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Storage/storageAccounts",
+              "apiVersion": "2021-09-01",
+              "name": "[variables('storageName')]",
+              "location": "[resourceGroup().location]",
+              "tags": {
+                "displayName": "[resourceGroup().name]"
+              },
+              "sku": {
+                "name": "Standard_LRS",
+                "tier": "Standard"
+              },
+              "kind": "StorageV2",
+              "properties": {
+                "publicNetworkAccess": "Enabled",
+                "allowBlobPublicAccess": true,
+                "allowSharedKeyAccess": true,
+                "accessTier": "Hot"
+              }
+            },
+            {
+              "name": "[variables('cosmosDbName')]",
+              "type": "Microsoft.DocumentDB/databaseAccounts",
+              "apiVersion": "2021-05-15",
+              "location": "[resourceGroup().location]",
+              "tags": {
+                "displayName": "[resourceGroup().name]"
+              },
+              "kind": "GlobalDocumentDB",
+              "properties": {
+                "consistencyPolicy": {
+                  "defaultConsistencyLevel": "Session",
+                  "maxIntervalInSeconds": 5,
+                  "maxStalenessPrefix": 100
+                },
+                "locations": [
+                  {
+                    "locationName": "[resourceGroup().location]",
+                    "provisioningState": "Succeeded",
+                    "failoverPriority": 0,
+                    "isZoneRedundant": false
+                  }
+                ],
+                "databaseAccountOfferType": "Standard",
+                "enableAutomaticFailover": true
+              }
+            },
+            {
+              "type": "Microsoft.Web/serverfarms",
+              "name": "[variables('serverFarmName')]",
+              "location": "[resourceGroup().location]",
+              "apiVersion": "2021-03-01",
+              "dependsOn": [],
+              "tags": {
+                "displayName": "[resourceGroup().name]"
+              },
+              "sku": {
+                "name": "[parameters('serverSize')]",
+                "tier": "[parameters('serverTier')]",
+                "size": "[parameters('serverSize')]",
+                "capacity": 1
+              },
+              "kind": "[parameters('serverType')]"
+            },
+
+            {
+              "type": "microsoft.insights/components",
+              "apiVersion": "2020-02-02",
+              "name": "[variables('insightName')]",
+              "tags": {
+                "displayName": "[resourceGroup().name]"
+              },
+              "location": "[resourceGroup().location]",
+              "kind": "web",
+              "properties": {
+                "Application_Type": "web",
+                "RetentionInDays": 90
+              }
+            },
+            {
+              "type": "Microsoft.Web/sites",
+              "apiVersion": "2021-03-01",
+              "tags": {
+                "displayName": "[resourceGroup().name]"
+              },
+              "name": "[variables('apiName')]",
+              "location": "[resourceGroup().location]",
+              "properties": {
+                "enabled": true,
+                "hostNameSslStates": [],
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('serverFarmName'))]",
+                "siteConfig": {
+                  "metadata": [
+                    {
+                      "name": "CURRENT_STACK",
+                      "value": "dotnetcore"
+                    }
+                  ]
+                }
+              },
+              "dependsOn": [
+                "[variables('serverFarmName')]",
+                "[variables('cosmosDbName')]",
+                "[variables('storageName')]",
+                "[variables('insightName')]"
+              ]
+            },
+            {
+              "type": "Microsoft.Web/sites/config",
+              "apiVersion": "2021-03-01",
+              "name": "[concat(variables('apiName'), '/web')]",
+              "location": "[resourceGroup().location]",
+              "dependsOn": [
+                "[variables('apiName')]",
+                "[resourceId('Microsoft.Insights/components', variables('insightName'))]"
+              ],
+              "properties": {
+                "connectionstrings": [
+                  {
+                    "name": "HelloContext",
+                    "connectionString": "[listConnectionStrings(resourceId('Microsoft.DocumentDB/databaseAccounts', variables('cosmosDbName')),'2021-05-15').connectionStrings[0].connectionString]",
+                    "type": "Custom"
+                  },
+                  {
+                    "name": "AzureWebJobsStorage",
+                    "connectionString": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageName'), ';AccountKey=', listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageName')),'2021-09-01').keys[0].value, ';EndpointSuffix=core.windows.net')]",
+                    "type": "Custom"
+                  }
+                ],
+                "appSettings": [
+                  {
+                    "name": "APPINSIGHTS_INSTRUMENTATIONKEY",
+                    "value": "[reference(resourceId( 'Microsoft.Insights/components', variables('insightName')),'2020-02-02').InstrumentationKey]"
+                  },
+                  {
+                    "name": "APPLICATIONINSIGHTS_CONNECTION_STRING",
+                    "value": "[reference(resourceId( 'Microsoft.Insights/components', variables('insightName')),'2020-02-02').ConnectionString]"
+                  },
+                  {
+                    "name": "ApplicationInsightsAgent_EXTENSION_VERSION",
+                    "value": "~2"
+                  },
+                  {
+                    "name": "XDT_MicrosoftApplicationInsights_Mode",
+                    "value": "default"
+                  }
+                ]
+              }
+            }
+          ],
+          "outputs": {
+            "publishProfile": {
+              "type": "object",
+              "value": "[list(concat('Microsoft.Web/sites/', variables('apiName') ,'/config/publishingcredentials'), '2016-08-01')]"
+            }
+          }
+        }
+
+      }
+    }
+  ],
+  "outputs": {
+    "deploymentOutput": {
+      "type": "object",
+      "value": "[reference(variables('deploymentName')).outputs]"
+    }
+
+  }
+}
